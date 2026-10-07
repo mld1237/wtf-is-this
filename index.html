@@ -234,14 +234,15 @@ function ecologyFor(p){
 function rankMeaning(rank=''){const n=String(rank).match(/[SG](\d)/i)?.[1];return ({'1':'Critically imperiled','2':'Imperiled','3':'Vulnerable','4':'Apparently secure','5':'Secure'})[n]||''}
 function cocDisplay(e){const vals=[e.coc58,e.coc59,e.coc82].map(v=>v===''||v==null?'—':v);return vals.join(' / ')}
 function scaleBar(value,min,max,left,mid,right,klass=''){
-  const n=Number(value);
+  const missing=value===''||value===null||value===undefined||value==='Unknown';
+  const n=missing?NaN:Number(value);
   if(!Number.isFinite(n)) return `<div class="scale-row"><div class="scale-track ${klass}"></div><div class="scale-labels"><span>${esc(left)}</span><span>${esc(mid)}</span><span>${esc(right)}</span></div></div>`;
   const pct=Math.max(0,Math.min(100,((n-min)/(max-min))*100));
   return `<div class="scale-row"><div class="scale-track ${klass}"><span class="scale-marker" style="left:${pct}%"></span></div><div class="scale-labels"><span>${esc(left)}</span><span>${esc(mid)}</span><span>${esc(right)}</span></div></div>`;
 }
 function rankStrip(rank=''){
   const n=Number(String(rank).match(/[SGT](\d)/i)?.[1]||0);
-  return `<div class="rank-strip">${[1,2,3,4,5].map(x=>`<div class="rank-cell ${n===x?'on':''}">${x}</div>`).join('')}</div><div class="rank-caption"><span>Critical</span><span>Imperiled</span><span>Vulnerable</span><span>Apparent secure</span><span>Secure</span></div>`;
+  return `<div class="rank-strip">${[1,2,3,4,5].map(x=>`<div class="rank-cell ${n===x?'on':''}">${x}</div>`).join('')}</div><div class="rank-caption"><span>Critical</span><span>Imperiled</span><span>Vulnerable</span><span>Apparently secure</span><span>Secure</span></div>`;
 }
 function spreadScale(status=''){
   const map={'Not Yet Detected':0,'Localized':50,'Widespread':100};
@@ -361,12 +362,21 @@ function openOccurrenceDialog(plant,occ){const val=(id,v='')=>document.getElemen
 async function saveOccurrenceForm(e){e.preventDefault();const plant=state.plants.find(p=>p.id===document.getElementById('occPlantId').value);if(!plant)return;const existingId=document.getElementById('occId').value;const occ={id:existingId||uid(),label:document.getElementById('occLabel').value.trim(),area:document.getElementById('occArea').value.trim()||'Other / unknown',detail:document.getElementById('occDetail').value.trim(),firstSeen:document.getElementById('occFirstSeen').value,notes:document.getElementById('occNotes').value.trim()};const occurrences=[...(plant.occurrences||[])];const i=occurrences.findIndex(x=>x.id===occ.id);if(i>=0)occurrences[i]=occ;else occurrences.push(occ);await put('plants',{...plant,occurrences,updatedAt:now()});const files=document.getElementById('occPhotos').files;if(files?.length)await quickUpload(files,plant.id,'','Unknown','Unknown',occ.id,false);document.getElementById('occurrenceDialog').close();await refresh();render()}
 async function deleteOccurrence(plant,occurrenceId){const occ=(plant.occurrences||[]).find(x=>x.id===occurrenceId);if(!occ)return;if(!confirm(`Delete ${occ.label||occ.area||'this individual'}? Its photos will stay in the plant gallery but will no longer be linked to this individual.`))return;for(const ph of state.photos.filter(x=>x.plantId===plant.id&&x.occurrenceId===occurrenceId))await put('photos',{...ph,occurrenceId:''});await put('plants',{...plant,occurrences:(plant.occurrences||[]).filter(x=>x.id!==occurrenceId),updatedAt:now()});await refresh();render()}
 
+function unresolvedTaxonContext(p){
+  const s=String(p.scientific||'').toLowerCase();
+  if(s.includes('fraxinus sp')){
+    return `<div class="panel" style="margin-bottom:10px"><div class="label">Species-level ID needed</div><div class="eco-score">Ash varies a lot by species</div><div class="eco-explain">Maine CoC values for the common native ash species are different enough that assigning one score to <i>Fraxinus</i> sp. would be misleading.</div><div class="three-col" style="margin-top:12px"><div class="panel"><div class="label">White ash</div><div class="eco-score">3 / 5 / 3</div></div><div class="panel"><div class="label">Black ash</div><div class="eco-score">7 / 7 / 6</div></div><div class="panel"><div class="label">Green ash</div><div class="eco-score">4 / 5 / 3</div></div></div><div class="eco-explain" style="margin-top:12px">MNAP’s current rare-plant tracking list does not list <i>Fraxinus</i>; NatureServe ranks also differ by species. White ash is currently G4, while black ash is G5 and both are SNR in Maine.</div></div>`;
+  }
+  return '';
+}
 function conservationEcologyHTML(p){
   const e=ecologyFor(p);
   const hasCoC=[e.coc58,e.coc59,e.coc82].some(v=>v!==''&&v!=null);
   const maineDisplay=e.sRank||e.maineRareStatus||'Not yet verified';
   const globalDisplay=e.gRank||'Not yet verified';
+  const unresolvedContext=unresolvedTaxonContext(p);
   return `
+    ${unresolvedContext}
     <div class="panel">
       <div class="label">Maine coefficient of conservatism</div>
       <div class="eco-score">${hasCoC?cocDisplay(e):'Not yet verified'}</div>
