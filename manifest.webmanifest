@@ -1,0 +1,18 @@
+{
+  "name": "WTF IS THIS? Backyard Plant Encyclopedia",
+  "short_name": "WTF IS THIS?",
+  "description": "A private, local-first field encyclopedia for backyard plant discoveries.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#171a17",
+  "theme_color": "#171a17",
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
