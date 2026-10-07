@@ -191,6 +191,7 @@ function plantAreas(p){const areas=(p.occurrences||[]).map(o=>o.area).filter(Boo
 function occurrencePhotos(plantId,occurrenceId){return state.photos.filter(p=>p.plantId===plantId&&p.occurrenceId===occurrenceId).sort((a,b)=>(b.primary?1:0)-(a.primary?1:0)||(a.order||0)-(b.order||0))}
 
 const ECO_DEFAULTS={
+  'fraxinus':{coc58:3,coc59:5,coc82:3,gRank:'G4',sRank:'SNR',maineRareStatus:'Not on Maine rare plant list',source:'MNAP CoC + MNAP rare plant list + NatureServe Explorer'},
   'pink-ladys-slipper':{coc58:5,coc59:6,coc82:4,gRank:'G5',maineRareStatus:'Not on Maine rare plant list',source:'MNAP CoC + MNAP rare plant list + NatureServe Explorer'},
   'broad-leaved-cattail':{coc58:2,coc59:2,coc82:2,gRank:'G5',maineRareStatus:'Not on Maine rare plant list',source:'MNAP CoC + MNAP rare plant list + NatureServe Explorer'},
   'wild-sarsaparilla':{coc58:5,coc59:4,coc82:4,maineRareStatus:'Not on Maine rare plant list',source:'MNAP CoC + MNAP rare plant list'},
@@ -305,7 +306,7 @@ const SEEDS=[
  seed('trifolium','Clover / Trifolium sp.',{scientific:'Trifolium sp.',status:'Unresolved',type:'Herb/groundcover'}),
  seed('apocynum','Dogbane / Apocynum sp.',{scientific:'Apocynum sp.',status:'Unresolved',type:'Herb/forb'}),
  seed('galeopsis','Hempnettle / Galeopsis sp.',{scientific:'Galeopsis sp.',status:'Unresolved',type:'Herb/forb'}),
- seed('fraxinus','Ash / Fraxinus sp.',{scientific:'Fraxinus sp.',status:'Unresolved',type:'Shrub/tree'}),
+ seed('fraxinus','White ash',{scientific:'Fraxinus americana',status:'Likely',confidence:80,type:'Shrub/tree',convinced:'Ash architecture plus stalked side leaflets and a distinctly paler leaflet underside support white ash over green or black ash.',revisions:revision('Ash / Fraxinus sp.','White ash / Fraxinus americana','Updated after a nearby ash showed stalked side leaflets and a noticeably paler underside consistent with white ash.')}),
  seed('populus','Poplar / Populus sp.',{scientific:'Populus sp.',status:'Unresolved',type:'Shrub/tree'}),
  seed('rubus','Bramble / Rubus sp.',{scientific:'Rubus sp.',status:'Unresolved',type:'Cane/shrub',convinced:'Reddish compound leaves were observed; blackberry vs raspberry remained unresolved.'}),
  seed('mustard-family','Mustard-family weed',{status:'Unresolved',type:'Herb/forb',notes:note('Yellow flowers; exact species unresolved.')}),
@@ -327,7 +328,35 @@ const getMeta=key=>new Promise((resolve,reject)=>{const r=tx('meta').get(key);r.
 const put=(store,val)=>new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).put(val);t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});
 const del=(store,key)=>new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).delete(key);t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});
 const clearStore=store=>new Promise((resolve,reject)=>{const t=db.transaction(store,'readwrite');t.objectStore(store).clear();t.oncomplete=()=>resolve();t.onerror=()=>reject(t.error)});
-async function init(){db=await openDB();if(!await getMeta('seeded')){for(const p of SEEDS)await put('plants',p);await put('meta',{key:'seeded',value:true}).catch(()=>{});const t=db.transaction('meta','readwrite');t.objectStore('meta').put(true,'seeded');await new Promise(r=>t.oncomplete=r)}await refresh();bindStatic();render()}
+async function migrateWhiteAshV1(){
+  const done=await getMeta('whiteAshV1');
+  if(done)return;
+  const p=await getOne('plants','fraxinus');
+  if(p){
+    const isOld=String(p.scientific||'').toLowerCase().includes('fraxinus sp') || p.name==='Ash / Fraxinus sp.';
+    if(isOld){
+      const revisions=[...(p.revisions||[])];
+      if(!revisions.some(r=>String(r.to||'').includes('Fraxinus americana'))){
+        revisions.push({id:uid(),date:now(),from:'Ash / Fraxinus sp.',to:'White ash / Fraxinus americana',text:'Updated after a nearby ash showed stalked side leaflets and a noticeably paler underside consistent with white ash.'});
+      }
+      await put('plants',{
+        ...p,
+        name:'White ash',
+        scientific:'Fraxinus americana',
+        status:'Likely',
+        confidence:p.confidence??80,
+        convinced:p.convinced||'Ash architecture plus stalked side leaflets and a distinctly paler leaflet underside support white ash over green or black ash.',
+        revisions,
+        updatedAt:now()
+      });
+    }
+  }
+  await put('meta',{key:'whiteAshV1',value:true}).catch(()=>{});
+  const t=db.transaction('meta','readwrite');
+  t.objectStore('meta').put(true,'whiteAshV1');
+  await new Promise(r=>t.oncomplete=r);
+}
+async function init(){db=await openDB();if(!await getMeta('seeded')){for(const p of SEEDS)await put('plants',p);await put('meta',{key:'seeded',value:true}).catch(()=>{});const t=db.transaction('meta','readwrite');t.objectStore('meta').put(true,'seeded');await new Promise(r=>t.oncomplete=r)}await migrateWhiteAshV1();await refresh();bindStatic();render()}
 async function refresh(){state.plants=await getAll('plants');state.photos=await getAll('photos');}
 function primaryPhoto(plantId){const ps=state.photos.filter(p=>p.plantId===plantId).sort((a,b)=>(b.primary?1:0)-(a.primary?1:0)||(a.order||0)-(b.order||0));return ps[0]}
 const photoURLCache=new Map();
